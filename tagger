@@ -6,7 +6,12 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
   exit 1
 }
 
+strip_numeric_suffix() {
+  sed -E 's/-[0-9]+([.][0-9]+)*$//'
+}
+
 input="${1:-}"
+prefix=""
 
 if [[ "$input" == "--help" ]]; then
   cat <<'EOF'
@@ -24,30 +29,42 @@ if [[ "$input" == "--pick" ]]; then
     exit 1
   fi
 
-  prefix=$(
-    git tag \
-      | sed -E 's/-[0-9]+$//' \
-      | sort -u \
-      | fzf --prompt="Select tag prefix: "
-  )
+  # Remove numeric suffixes like -1, -10, -1.8, -1.2.3 and keep unique prefixes.
+  prefixes=$(git tag | strip_numeric_suffix | sort -u)
 
-  [[ -n "$prefix" ]] || {
+  display_list=()
+  while read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+
+    tag=$(git tag --list "${candidate}-*" --sort=-v:refname | head -n 1)
+
+    if [[ -n "$tag" ]] && git merge-base --is-ancestor "$tag" HEAD 2>/dev/null; then
+      display_list+=("[current branch] $candidate")
+    else
+      display_list+=("  $candidate")
+    fi
+  done <<< "$prefixes"
+
+  selected=$(printf "%s\n" "${display_list[@]}" | fzf --prompt="Select tag prefix: ")
+
+  [[ -n "$selected" ]] || {
     echo "No selection made"
     exit 1
   }
-else
-  last_tag=$(git for-each-ref --sort=-creatordate --format '%(refname:short)' refs/tags | head -n 1)
 
-  if [[ -n "$input" ]]; then
-    prefix="$input"
-  else
-    [[ -n "$last_tag" ]] || {
-      echo "No existing tags found. Pass a prefix explicitly."
-      exit 1
-    }
-    prefix=$(echo "$last_tag" | sed -E 's/-[0-9]+$//')
-    echo "Using last tag prefix: $prefix"
+  prefix=$(echo "$selected" | sed 's/^\[current branch\] //; s/^  //')
+  echo "Selected prefix: $prefix"
+elif [[ -n "$input" ]]; then
+  prefix="$input"
+else
+  latest_tag=$(git tag --sort=-v:refname | head -n 1)
+  if [[ -z "$latest_tag" ]]; then
+    echo "No tags found. Provide a prefix, for example: tagger my-tag"
+    exit 1
   fi
+
+  prefix=$(echo "$latest_tag" | strip_numeric_suffix)
+  echo "Using latest tag prefix: $prefix"
 fi
 
 last_matching_tag=$(git tag --list "${prefix}-*" --sort=-v:refname | head -n 1)

@@ -33,17 +33,22 @@ if [[ "$input" == "--pick" ]]; then
   prefixes=$(git tag | strip_numeric_suffix | sort -u)
 
   display_list=()
+  current_branch_list=()
   while read -r candidate; do
     [[ -n "$candidate" ]] || continue
 
     tag=$(git tag --list "${candidate}-*" --sort=-v:refname | head -n 1)
 
     if [[ -n "$tag" ]] && git merge-base --is-ancestor "$tag" HEAD 2>/dev/null; then
-      display_list+=("[current branch] $candidate")
+      current_branch_list+=("[current branch] $candidate")
     else
       display_list+=("  $candidate")
     fi
   done <<< "$prefixes"
+
+  if [[ ${#current_branch_list[@]} -gt 0 ]]; then
+    display_list+=("${current_branch_list[@]}")
+  fi
 
   selected=$(printf "%s\n" "${display_list[@]}" | fzf --prompt="Select tag prefix: ")
 

@@ -32,8 +32,8 @@ if [[ "$input" == "--pick" ]]; then
   # Remove numeric suffixes like -1, -10, -1.8, -1.2.3 and keep unique prefixes.
   prefixes=$(git tag | strip_numeric_suffix | sort -u)
 
-  display_list=()
   current_branch_list=()
+  display_list=()
   while read -r candidate; do
     [[ -n "$candidate" ]] || continue
 
@@ -47,7 +47,7 @@ if [[ "$input" == "--pick" ]]; then
   done <<< "$prefixes"
 
   if [[ ${#current_branch_list[@]} -gt 0 ]]; then
-    display_list+=("${current_branch_list[@]}")
+    display_list=("${current_branch_list[@]}" "${display_list[@]}")
   fi
 
   selected=$(printf "%s\n" "${display_list[@]}" | fzf --prompt="Select tag prefix: ")
@@ -95,8 +95,8 @@ echo "  git tag \"$next_tag\""
 echo "  git push origin \"$next_tag\""
 echo
 
-read -r -p "Create and push this tag? (y/n): " confirm
-if [[ "$confirm" == "y" ]]; then
+read -r -p "Create and push this tag? ([Y]/n): " confirm
+if [[ -z "$confirm" || "$confirm" == "y" || "$confirm" == "Y" ]]; then
   git tag "$next_tag"
   git push origin "$next_tag"
   echo "Tag created and pushed: $next_tag"
